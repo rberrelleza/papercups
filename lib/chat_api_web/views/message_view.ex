@@ -1,6 +1,6 @@
 defmodule ChatApiWeb.MessageView do
   use ChatApiWeb, :view
-  alias ChatApiWeb.MessageView
+  alias ChatApiWeb.{MessageView, UserView}
 
   def render("index.json", %{messages: messages}) do
     %{data: render_many(messages, MessageView, "message.json")}
@@ -11,7 +11,7 @@ defmodule ChatApiWeb.MessageView do
   end
 
   def render("message.json", %{message: message}) do
-    %{
+    data = %{
       id: message.id,
       body: message.body,
       created_at: message.inserted_at,
@@ -19,5 +19,15 @@ defmodule ChatApiWeb.MessageView do
       conversation_id: message.conversation_id,
       user_id: message.user_id
     }
+
+    case message do
+      %{user: %ChatApi.Users.User{} = user} ->
+        Map.merge(data, %{
+          agent: render_one(user, UserView, "user.json")
+        })
+
+      _ ->
+        data
+    end
   end
 end

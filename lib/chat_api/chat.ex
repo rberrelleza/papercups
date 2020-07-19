@@ -46,7 +46,7 @@ defmodule ChatApi.Chat do
 
   """
   def get_message!(id) do
-    Message |> Repo.get!(id) |> Repo.preload(:conversation)
+    Message |> Repo.get!(id) |> Repo.preload([:conversation, :user])
   end
 
   @doc """

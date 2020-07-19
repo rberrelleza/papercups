@@ -31,7 +31,7 @@ defmodule ChatApi.Conversations do
     |> where(account_id: ^account_id)
     |> where(^filter_where(params))
     |> order_by(desc: :inserted_at)
-    |> preload([:customer, :messages])
+    |> preload([:customer, [messages: :user]])
     |> Repo.all()
   end
 

@@ -12,6 +12,7 @@ dayjs.extend(utc);
 type Props = {
   message: Message;
   isMe?: boolean;
+  color?: string;
   isLastInGroup?: boolean;
   shouldDisplayTimestamp?: boolean;
 };
@@ -19,6 +20,7 @@ type Props = {
 const ChatMessage = ({
   message,
   isMe,
+  color,
   isLastInGroup,
   shouldDisplayTimestamp,
 }: Props) => {
@@ -57,10 +59,7 @@ const ChatMessage = ({
       <Flex sx={{justifyContent: 'flex-start', alignItems: 'center'}}>
         <Box mr={3} mt={1}>
           {/* TODO: include name/email to distinguish between agents */}
-          <SmileTwoTone
-            style={{fontSize: 20}}
-            twoToneColor={isAgent ? colors.primary : colors.gold}
-          />
+          <SmileTwoTone style={{fontSize: 20}} twoToneColor={color} />
         </Box>
         <Box
           px={3}

@@ -29,6 +29,57 @@ const EmptyMessagesPlaceholder = () => {
   );
 };
 
+const formatMessage = (message: Message) => {
+  return {
+    ...message,
+    sender: message.customer_id ? 'customer' : 'agent',
+    sender_id: message.customer_id || message.user_id,
+  };
+};
+
+const MessagesContainer = ({
+  currentUser,
+  messages,
+}: {
+  currentUser: any;
+  messages: Array<Message>;
+}) => {
+  const {gold, primary, green, red, gray} = colors;
+  const options = [gold, primary, green, red, ...gray];
+  const mappings: any = {};
+
+  return (
+    <>
+      {messages.map((message: any, key: number) => {
+        const msg = formatMessage(message);
+        const next = messages[key + 1];
+        const isMe = msg.sender_id === currentUser.id;
+        const k: any = msg.sender_id || -1;
+        const color = mappings[k]
+          ? mappings[k]
+          : options[Object.keys(mappings).length];
+        const isLastInGroup = next
+          ? msg.customer_id !== next.customer_id
+          : true;
+
+        mappings[k] = color;
+
+        // TODO: fix `isMe` logic for multiple agents
+        return (
+          <ChatMessage
+            key={key}
+            message={msg}
+            isMe={isMe}
+            color={color}
+            isLastInGroup={isLastInGroup}
+            shouldDisplayTimestamp={isLastInGroup}
+          />
+        );
+      })}
+    </>
+  );
+};
+
 type Props = {
   title?: string;
   conversations: Array<Conversation>;
@@ -427,26 +478,10 @@ class ConversationsContainer extends React.Component<Props, State> {
                 sx={{minHeight: '100%'}}
               >
                 {messages.length ? (
-                  messages.map((message: any, key: number) => {
-                    // Slight hack
-                    const msg = this.formatMessage(message);
-                    const next = messages[key + 1];
-                    const isMe = msg.user_id && msg.user_id === currentUser.id;
-                    const isLastInGroup = next
-                      ? msg.customer_id !== next.customer_id
-                      : true;
-
-                    // TODO: fix `isMe` logic for multiple agents
-                    return (
-                      <ChatMessage
-                        key={key}
-                        message={msg}
-                        isMe={isMe}
-                        isLastInGroup={isLastInGroup}
-                        shouldDisplayTimestamp={isLastInGroup}
-                      />
-                    );
-                  })
+                  <MessagesContainer
+                    messages={messages}
+                    currentUser={currentUser}
+                  />
                 ) : showGetStarted ? (
                   <GettingStarted accountId={account.id} />
                 ) : (
