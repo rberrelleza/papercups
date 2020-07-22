@@ -1,11 +1,16 @@
 use Mix.Config
 
+database_url =
+  System.get_env("DATABASE_URL") || "ecto://postgres:postgres@localhost/chat_api_dev"
+    raise """
+    environment variable DATABASE_URL is missing.
+    For example: 
+    """
+
+
 # Configure your database
 config :chat_api, ChatApi.Repo,
-  username: "postgres",
-  password: "postgres",
-  database: "chat_api_dev",
-  hostname: "localhost",
+  url: database_url,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 

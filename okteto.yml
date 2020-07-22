@@ -1,0 +1,7 @@
+name: papercups
+image: ramiro/elixir:1.10
+command:
+- bash
+workdir: /usr/src/app
+environment:
+  - DATABASE_URL
