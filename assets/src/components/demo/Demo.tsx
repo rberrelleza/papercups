@@ -85,6 +85,7 @@ class Demo extends React.Component<Props, State> {
           subtitle={subtitle}
           primaryColor={color}
           accountId={accountId}
+          baseUrl="http://localhost:4000"
           defaultIsOpen
         />
       </Box>
