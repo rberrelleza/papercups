@@ -1,0 +1,9 @@
+name: papercups
+labels:
+  app.kubernetes.io/name: papercups
+image: ramiro/papercups
+workdir: /usr/src/app
+build:
+  args:
+  - MIX_ENV=dev
+command: bash

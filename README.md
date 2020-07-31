@@ -8,6 +8,11 @@ The code behind [app.papercups.io](https://app.papercups.io/)
 
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/papercups-io/papercups)
 
+
+## Develop on Okteto 
+
+[![Develop on Okteto](https://img.shields.io/endpoint?url=https%3A%2F%2Fokteto.com%2Fbadge.json)](https://cloud.okteto.com/deploy)
+
 ## Getting started
 
 To start your server:
