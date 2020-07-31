@@ -1,7 +1,7 @@
 apiVersion: v2
 name: papercups
-description: Papercups is an open source live customer chat web app
-
+description: An open source live customer chat web app
+icon: https://raw.githubusercontent.com/papercups-io/papercups/master/assets/public/logo.svg
 type: application
 version: 0.1.0
 appVersion: 0.1.0
