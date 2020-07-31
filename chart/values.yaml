@@ -1,0 +1,58 @@
+# Default values for papercups.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+env: dev
+secretKeyBase: 
+
+image:
+  repository: ramiro/papercups
+  pullPolicy: IfNotPresent
+  tag: latest
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: LoadBalancer
+  port: 4000
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+postgresql:
+  # disable to use an external or hosted DB
+  enabled: true
+  postgresqlUsername: papercups
+  postgresqlPassword: Password@123
+  postgresqlDatabase: chat_api
+
