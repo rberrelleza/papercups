@@ -31,10 +31,11 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
           - name: SECRET_KEY_BASE
             value: {{ .Values.secretKeyBase }} 
           - name: DATABASE_URL
-            value: ecto://{{ .Values.postgresql.postgresqlUsername }}:{{ .Values.postgresql.postgresqlPassword }}@{{  }}/{{ .Values.postgresql.postgresqlDatabase }}
+            value: {{ include "papercups.postgresql.connectionString" . }}
           - name: MIX_ENV
             value: {{ .Values.env }}
           ports:

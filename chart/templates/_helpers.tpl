@@ -61,3 +61,16 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{- define "papercups.postgresql.host" -}}
+{{- if .Values.postgresql.enabled }}
+{{- printf "%s-postgresql" .Release.Name }}
+{{- else -}}
+{{- required ".Values.postgresql.postgresqlExternalHost is required when using an external DB" .Values.postgresql.postgresqlExternalHost }}
+{{- end }}
+{{- end }}
+
+{{- define "papercups.postgresql.connectionString" -}}
+{{- $host := include "papercups.postgresql.host" . }}
+{{- printf "ecto://%s:%s@%s/%s" .Values.postgresql.postgresqlUsername .Values.postgresql.postgresqlPassword $host .Values.postgresql.postgresqlDatabase }}
+{{- end }}

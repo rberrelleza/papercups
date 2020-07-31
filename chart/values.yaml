@@ -50,9 +50,10 @@ tolerations: []
 affinity: {}
 
 postgresql:
-  # disable to use an external or hosted DB
-  enabled: true
   postgresqlUsername: papercups
-  postgresqlPassword: Password@123
+  postgresqlPassword: Password123
   postgresqlDatabase: chat_api
-
+  
+  # set enabled to false and set postgresqlExternalHost to use an external DB
+  enabled: true
+  postgresqlExternalHost:
