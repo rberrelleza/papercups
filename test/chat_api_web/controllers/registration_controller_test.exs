@@ -20,7 +20,16 @@ defmodule ChatApiWeb.RegistrationControllerTest do
         "email" => "invalid",
         "password" => @password,
         "password_confirmation" => "",
-        "company_name" => "test"
+        "company_name" => "Invalid Inc"
+      }
+    }
+
+    @missing_company_name %{
+      "user" => %{
+        "email" => "invalid",
+        "password" => @password,
+        "password_confirmation" => @password,
+        "company_name" => ""
       }
     }
 
@@ -40,11 +49,25 @@ defmodule ChatApiWeb.RegistrationControllerTest do
       assert json["error"]["status"] == 500
       assert json["error"]["errors"]["password_confirmation"] == ["does not match confirmation"]
       assert json["error"]["errors"]["email"] == ["has invalid format"]
+
+      # No accounts should have been created
+      assert [] = Accounts.list_accounts()
+    end
+
+    test "with missing company name", %{conn: conn} do
+      conn = post(conn, Routes.registration_path(conn, :create, @missing_company_name))
+
+      assert json = json_response(conn, 500)
+      assert json["error"]["message"] == "Couldn't create user"
+      assert json["error"]["status"] == 500
+      assert json["error"]["errors"]["company_name"] == ["can't be blank"]
+
+      # No accounts should have been created
+      assert [] = Accounts.list_accounts()
     end
   end
 
   describe("registering with invitation token") do
-
     def fixture(:account) do
       {:ok, account} = Accounts.create_account(%{company_name: "Taro"})
       account
@@ -58,7 +81,13 @@ defmodule ChatApiWeb.RegistrationControllerTest do
 
     setup %{conn: conn} do
       account = fixture(:account)
-      existing_user = %ChatApi.Users.User{email: "test@example.com", account_id: account.id}
+
+      existing_user = %ChatApi.Users.User{
+        email: "test@example.com",
+        role: "admin",
+        account_id: account.id
+      }
+
       # conn = put_req_header(conn, "accept", "application/json")
       authed_conn = Pow.Plug.assign_current_user(conn, existing_user, [])
 
@@ -73,7 +102,7 @@ defmodule ChatApiWeb.RegistrationControllerTest do
 
       invite_token = json_response(existing_conn, 201)["data"]["id"]
 
-      random_number = :rand.uniform(1000000000) |> Integer.to_string()
+      random_number = :rand.uniform(1_000_000_000) |> Integer.to_string()
       registration_email = random_number <> "anotheremail@example.com"
 
       params = %{
@@ -89,6 +118,47 @@ defmodule ChatApiWeb.RegistrationControllerTest do
       account = Accounts.get_account!(account.id) |> Repo.preload([:users])
 
       assert(Enum.any?(account.users, fn u -> u.email == registration_email end))
+    end
+
+    test "error for non-existing invite token", %{conn: conn} do
+      random_number = :rand.uniform(1_000_000_000) |> Integer.to_string()
+      registration_email = random_number <> "anotheremail@example.com"
+
+      params = %{
+        "user" => %{
+          "invite_token" => "093ada1d-02c2-4e08-bdd1-d0d6e567db2e",
+          "email" => registration_email,
+          "password" => @password,
+          "password_confirmation" => @password
+        }
+      }
+
+      existing_conn = post(conn, Routes.registration_path(conn, :create, params))
+      assert json = json_response(existing_conn, 403)
+      assert json["error"]["message"] == "Invalid invitation token"
+      assert json["error"]["status"] == 403
+    end
+
+    test "error for expired invite token", %{conn: conn, account: account} do
+      {_, user_invitation} = UserInvitations.create_user_invitation(%{account_id: account.id})
+      UserInvitations.expire_user_invitation(user_invitation)
+
+      random_number = :rand.uniform(1_000_000_000) |> Integer.to_string()
+      registration_email = random_number <> "anotheremail@example.com"
+
+      params = %{
+        "user" => %{
+          "invite_token" => user_invitation.id,
+          "email" => registration_email,
+          "password" => @password,
+          "password_confirmation" => @password
+        }
+      }
+
+      existing_conn = post(conn, Routes.registration_path(conn, :create, params))
+      assert json = json_response(existing_conn, 403)
+      assert json["error"]["message"] == "Invitation token has expired"
+      assert json["error"]["status"] == 403
     end
   end
 end

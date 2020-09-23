@@ -13,8 +13,11 @@ defmodule ChatApi.Application do
       ChatApiWeb.Telemetry,
       # Start the PubSub system
       {Phoenix.PubSub, name: ChatApi.PubSub},
+      ChatApiWeb.Presence,
       # Start the Endpoint (http/https)
-      ChatApiWeb.Endpoint
+      ChatApiWeb.Endpoint,
+      # Start Oban workers
+      {Oban, oban_config()}
       # Start a worker by calling: ChatApi.Worker.start_link(arg)
       # {ChatApi.Worker, arg}
     ]
@@ -30,5 +33,10 @@ defmodule ChatApi.Application do
   def config_change(changed, _new, removed) do
     ChatApiWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  # Conditionally disable crontab, queues, or plugins here.
+  defp oban_config do
+    Application.get_env(:chat_api, Oban)
   end
 end

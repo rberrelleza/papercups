@@ -31,9 +31,43 @@ config :phoenix, :json_library, Jason
 
 config :tesla, adapter: Tesla.Adapter.Hackney
 
+# Configure Swagger
+config :phoenix_swagger, json_library: Jason
+
+config :chat_api, :phoenix_swagger,
+  swagger_files: %{
+    "priv/static/swagger.json" => [
+      # phoenix routes will be converted to swagger paths
+      router: ChatApiWeb.Router,
+      # (optional) endpoint config used to set host, port and https schemes.
+      endpoint: ChatApiWeb.Endpoint
+    ]
+  }
+
+# Configure Sentry
+sentry_dsn = System.get_env("SENTRY_DSN")
+
+if sentry_dsn != nil do
+  config :sentry,
+    dsn: sentry_dsn,
+    environment_name: Mix.env(),
+    included_environments: [:prod],
+    enable_source_code_context: true,
+    root_source_code_path: File.cwd!()
+end
+
 config :chat_api, :pow,
   user: ChatApi.Users.User,
   repo: ChatApi.Repo
+
+config :chat_api, Oban,
+  repo: ChatApi.Repo,
+  plugins: [Oban.Plugins.Pruner],
+  queues: [default: 10, events: 50, mailers: 20],
+  crontab: [
+    # Hourly example worker
+    {"0 * * * *", ChatApi.Workers.Example}
+  ]
 
 # Configure Mailgun
 mailgun_api_key = System.get_env("MAILGUN_API_KEY")
@@ -44,6 +78,23 @@ if mailgun_api_key != nil and domain != nil do
     adapter: Swoosh.Adapters.Mailgun,
     api_key: mailgun_api_key,
     domain: domain
+end
+
+site_id = System.get_env("CUSTOMER_IO_SITE_ID")
+customerio_api_key = System.get_env("CUSTOMER_IO_API_KEY")
+
+if site_id != nil and customerio_api_key != nil do
+  config :customerio,
+    site_id: site_id,
+    api_key: customerio_api_key
+end
+
+case System.get_env("PAPERCUPS_STRIPE_SECRET") do
+  "sk_" <> _rest = api_key ->
+    config :stripity_stripe, api_key: api_key
+
+  _ ->
+    nil
 end
 
 # Import environment specific config. This must remain at the bottom

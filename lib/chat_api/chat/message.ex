@@ -1,4 +1,4 @@
-defmodule ChatApi.Chat.Message do
+defmodule ChatApi.Messages.Message do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -11,6 +11,9 @@ defmodule ChatApi.Chat.Message do
   @foreign_key_type :binary_id
   schema "messages" do
     field(:body, :string)
+    field(:sent_at, :utc_datetime)
+    field(:seen_at, :utc_datetime)
+
     belongs_to(:conversation, Conversation)
     belongs_to(:account, Account)
     belongs_to(:customer, Customer)
@@ -22,7 +25,15 @@ defmodule ChatApi.Chat.Message do
   @doc false
   def changeset(message, attrs) do
     message
-    |> cast(attrs, [:body, :conversation_id, :account_id, :customer_id, :user_id])
-    |> validate_required([:body, :account_id])
+    |> cast(attrs, [
+      :body,
+      :conversation_id,
+      :account_id,
+      :customer_id,
+      :user_id,
+      :sent_at,
+      :seen_at
+    ])
+    |> validate_required([:body, :account_id, :conversation_id])
   end
 end

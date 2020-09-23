@@ -3,12 +3,14 @@ import {RouteComponentProps, Link} from 'react-router-dom';
 import {Box, Flex} from 'theme-ui';
 import {Button, Input, Text, Title} from '../common';
 import {useAuth} from './AuthProvider';
+import logger from '../../logger';
 
 type Props = RouteComponentProps<{invite?: string}> & {
   onSubmit: (params: any) => Promise<void>;
 };
 type State = {
   loading: boolean;
+  submitted: boolean;
   companyName: string;
   email: string;
   password: string;
@@ -20,6 +22,7 @@ type State = {
 class Register extends React.Component<Props, State> {
   state: State = {
     loading: false,
+    submitted: false,
     companyName: '',
     email: '',
     password: '',
@@ -49,10 +52,48 @@ class Register extends React.Component<Props, State> {
     this.setState({passwordConfirmation: e.target.value});
   };
 
+  getValidationError = () => {
+    const {
+      companyName,
+      email,
+      password,
+      passwordConfirmation,
+      inviteToken,
+    } = this.state;
+
+    if (!companyName && !inviteToken) {
+      return 'Company name is required';
+    } else if (!email) {
+      return 'Email is required';
+    } else if (!password) {
+      return 'Password is required';
+    } else if (password !== passwordConfirmation) {
+      return 'Password confirmation does not match';
+    } else {
+      return null;
+    }
+  };
+
+  handleInputBlur = () => {
+    if (!this.state.submitted) {
+      return;
+    }
+
+    this.setState({error: this.getValidationError()});
+  };
+
   handleSubmit = (e: any) => {
     e.preventDefault();
 
-    this.setState({loading: true, error: null});
+    const error = this.getValidationError();
+
+    if (error) {
+      this.setState({error, submitted: true});
+
+      return;
+    }
+
+    this.setState({loading: true, submitted: true, error: null});
     const {
       companyName,
       inviteToken,
@@ -71,7 +112,7 @@ class Register extends React.Component<Props, State> {
       })
       .then(() => this.props.history.push('/conversations'))
       .catch((err) => {
-        console.log('Error!', err);
+        logger.error('Error!', err);
         // TODO: provide more granular error messages?
         const error =
           err.response?.body?.error?.message || 'Invalid credentials';
@@ -111,10 +152,11 @@ class Register extends React.Component<Props, State> {
                 <Input
                   id="companyName"
                   size="large"
-                  type="companyName"
+                  type="text"
                   autoComplete="company-name"
                   value={companyName}
                   onChange={this.handleChangeCompanyName}
+                  onBlur={this.handleInputBlur}
                 />
               </Box>
             )}
@@ -128,6 +170,7 @@ class Register extends React.Component<Props, State> {
                 autoComplete="username"
                 value={email}
                 onChange={this.handleChangeEmail}
+                onBlur={this.handleInputBlur}
               />
             </Box>
 
@@ -140,6 +183,7 @@ class Register extends React.Component<Props, State> {
                 autoComplete="current-password"
                 value={password}
                 onChange={this.handleChangePassword}
+                onBlur={this.handleInputBlur}
               />
             </Box>
 
@@ -152,6 +196,7 @@ class Register extends React.Component<Props, State> {
                 autoComplete="current-password"
                 value={passwordConfirmation}
                 onChange={this.handleChangePasswordConfirmation}
+                onBlur={this.handleInputBlur}
               />
             </Box>
 
@@ -174,7 +219,7 @@ class Register extends React.Component<Props, State> {
             )}
 
             <Box mt={error ? 3 : 4}>
-              Already have an account? <Link to="login">Log in!</Link>
+              Already have an account? <Link to="/login">Log in!</Link>
             </Box>
           </form>
         </Box>

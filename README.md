@@ -1,66 +1,58 @@
 # Papercups
 
-The code behind [app.papercups.io](https://app.papercups.io/)
+Papercups is an open source live customer chat web app written in Elixir. We offer a hosted version at [app.papercups.io](https://app.papercups.io/).
 
-![dashboard-v1](https://user-images.githubusercontent.com/5264279/88119050-4f54b480-cb8d-11ea-8f50-1a656068fd82.gif)
+You can check out how our chat widget looks and play around with customizing it on our [demo page](https://app.papercups.io/demo/). The chat widget component is also open sourced at [github.com/papercups-io/chat-widget](https://github.com/papercups-io/chat-widget).
 
-## One click Heroku deployment
+_Watch how easy it is to get set up with our Slack integration 🚀 :_
+![slack-setup](https://user-images.githubusercontent.com/4218509/88716918-a0583180-d0d4-11ea-93b3-12437ac51138.gif)
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/papercups-io/papercups)
+[![Develop on Okteto](https://okteto.com/develop-okteto.svg)](https://cloud.okteto.com/deploy)
 
-
-## Develop on Okteto 
-
-[![Develop on Okteto](https://img.shields.io/endpoint?url=https%3A%2F%2Fokteto.com%2Fbadge.json)](https://cloud.okteto.com/deploy)
 
 ## Getting started
 
 To start your server:
 
-- Install dependencies with `mix deps.get`
-- Create and migrate your database with `mix ecto.setup`
-- Start the server with `mix phx.server`
+The fastest way to get started is one click deploy on Heroku with:
 
-This will automatically start up the React frontend in watch mode on `localhost:3000`, with the API running on `localhost:4000`.
+<a href="https://heroku.com/deploy?template=https://github.com/papercups-io/papercups"><img src="https://www.herokucdn.com/deploy/button.svg" width="200px" /></a>
 
-### To start client side
+## Philosophy
 
-The frontend code will start up automatically when you run `mix phx.server`, but for more information see: [assets/README.md](assets/README.md)
+We wanted to make a self-hosted version of tools like Intercom and Drift for companies that have privacy and security concerns about having customer data going to third party services. We’re starting with chat right now but we want to expand into all forms of customer communication like email campaigns and push notifications.
 
-## Setting up email alerts
+Stay tuned! We'll be posting a more detailed roadmap soon 🤓
 
-Set the environment variables in the [`.env.example`](https://github.com/papercups-io/papercups/blob/master/.env.example) file.
+## Features
 
-At the moment we only support [Mailgun](https://www.mailgun.com/) — other messaging channels are coming soon!
+- **Custom chat widget** - a customizable chat widget you can embed on your website to talk to your customers
+- **React support** - embed the chat widget as a [React component](https://github.com/papercups-io/chat-widget#using-in-react), or a simple [HTML snippet](https://github.com/papercups-io/chat-widget#using-in-html)
+- **React Native support (alpha)** - embed the chat widget in your [React Native](https://github.com/papercups-io/chat-widget-native#papercups-iochat-widget-native) app (work in progress)
+- **Slack integration** - connect with Slack, so you can view and reply to messages directly from a Slack channel
+- **Markdown and emoji support** - use markdown and emoji to add character to your messages!
+- **Invite your team** - send invite links to your teammates to join your account
+- **Conversation management** - close, assign, and prioritize conversations
+- **Built on Elixir** - optimized for responsiveness, fault-tolerance, and support for realtime updates
 
-## Running tests
+## Demo
 
-Create a PostgreSQL test database named: `chat_api_test`, and run:
+We set up a [simple page](https://app.papercups.io/demo) that demonstrates how Papercups works. 
 
-```
-mix test
-```
+Try sending us a message to see what the chat experience is like!
 
-## Deploying
+## Documentation
 
-We currently use Heroku for deployments:
+[Getting setup for development](https://github.com/papercups-io/papercups/wiki/Development-Setup#getting-started)
 
-```
-git push heroku master
-```
+## Contributing
 
-## Running compiler on file change
+We :heart:  contributions big or small. See [CONTRIBUTING.md](https://github.com/papercups-io/papercups/blob/master/CONTRIBUTING.md) for a guide on how to get started.
 
-_Note_: Make sure you are running this inside of ChatApi otherwise it'll trigger on UI changes
+## Get in touch
 
-```
-./scripts/compile_watch.sh
-```
+Come say hi to us on [Slack](https://join.slack.com/t/papercups-io/shared_invite/zt-h0c3fxmd-hZi1Zp8~D61S6GD16aMqmg)! :wave:
 
-## Learn more about Phoenix
+## License
 
-- Official website: https://www.phoenixframework.org/
-- Guides: https://hexdocs.pm/phoenix/overview.html
-- Docs: https://hexdocs.pm/phoenix
-- Forum: https://elixirforum.com/c/phoenix-forum
-- Source: https://github.com/phoenixframework/phoenix
+MIT © Papercups

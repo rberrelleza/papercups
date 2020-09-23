@@ -7,6 +7,7 @@ defmodule ChatApi.Conversations do
   alias ChatApi.Repo
 
   alias ChatApi.Conversations.Conversation
+  alias ChatApi.Messages.Message
 
   @doc """
   Returns the list of conversations.
@@ -31,7 +32,7 @@ defmodule ChatApi.Conversations do
     |> where(account_id: ^account_id)
     |> where(^filter_where(params))
     |> order_by(desc: :inserted_at)
-    |> preload([:customer, :messages])
+    |> preload([:customer, [messages: [user: :profile]]])
     |> Repo.all()
   end
 
@@ -63,7 +64,7 @@ defmodule ChatApi.Conversations do
         where: c.customer_id == ^customer_id and c.account_id == ^account_id,
         select: c,
         order_by: [desc: :inserted_at],
-        preload: [:customer, :messages]
+        preload: [:customer, messages: [user: :profile]]
       )
 
     Repo.all(query)
@@ -84,7 +85,7 @@ defmodule ChatApi.Conversations do
 
   """
   def get_conversation!(id) do
-    Conversation |> Repo.get!(id) |> Repo.preload([:messages, :customer])
+    Conversation |> Repo.get!(id) |> Repo.preload([:customer, messages: [user: :profile]])
   end
 
   def get_conversation(id) do
@@ -93,6 +94,10 @@ defmodule ChatApi.Conversations do
 
   def get_conversation_with!(id, preloaded) do
     Conversation |> Repo.get!(id) |> Repo.preload(preloaded)
+  end
+
+  def get_conversation_customer!(conversation_id) do
+    conversation_id |> get_conversation_with!(:customer) |> Map.get(:customer)
   end
 
   @doc """
@@ -129,6 +134,53 @@ defmodule ChatApi.Conversations do
     conversation
     |> Conversation.changeset(attrs)
     |> Repo.update()
+  end
+
+  def mark_conversation_read(%Conversation{} = conversation) do
+    update_conversation(conversation, %{read: true})
+  end
+
+  def mark_conversation_read(conversation_id) do
+    conversation = get_conversation!(conversation_id)
+
+    mark_conversation_read(conversation)
+  end
+
+  def mark_conversation_unread(%Conversation{} = conversation) do
+    update_conversation(conversation, %{read: false})
+  end
+
+  def mark_conversation_unread(conversation_id) do
+    conversation = get_conversation!(conversation_id)
+
+    mark_conversation_unread(conversation)
+  end
+
+  def get_unseen_agent_messages(conversation_id) do
+    Message
+    |> where(conversation_id: ^conversation_id)
+    |> where([m], is_nil(m.seen_at))
+    |> where([m], not is_nil(m.user_id))
+    |> Repo.all()
+  end
+
+  def mark_agent_messages_as_seen(conversation_id) do
+    Message
+    |> where(conversation_id: ^conversation_id)
+    |> where([m], is_nil(m.seen_at))
+    |> where([m], not is_nil(m.user_id))
+    |> Repo.update_all(set: [seen_at: DateTime.utc_now()])
+  end
+
+  def has_unseen_messages?(conversation_id) do
+    query =
+      from(m in Message,
+        where:
+          m.conversation_id == ^conversation_id and is_nil(m.seen_at) and not is_nil(m.user_id),
+        select: count("*")
+      )
+
+    Repo.one(query) > 0
   end
 
   @doc """

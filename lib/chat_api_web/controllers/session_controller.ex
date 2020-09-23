@@ -10,12 +10,23 @@ defmodule ChatApiWeb.SessionController do
     |> Pow.Plug.authenticate_user(user_params)
     |> case do
       {:ok, conn} ->
-        json(conn, %{
-          data: %{
-            token: conn.private[:api_auth_token],
-            renew_token: conn.private[:api_renew_token]
-          }
-        })
+        conn
+        |> ChatApiWeb.EnsureUserEnabledPlug.call()
+        |> case do
+          %{halted: true} = conn ->
+            conn
+
+          conn ->
+            json(conn, %{
+              data: %{
+                user_id: conn.assigns.current_user.id,
+                email: conn.assigns.current_user.email,
+                account_id: conn.assigns.current_user.account_id,
+                token: conn.private[:api_auth_token],
+                renew_token: conn.private[:api_renew_token]
+              }
+            })
+        end
 
       {:error, conn} ->
         conn
@@ -36,13 +47,24 @@ defmodule ChatApiWeb.SessionController do
         |> put_status(401)
         |> json(%{error: %{status: 401, message: "Invalid token"}})
 
-      {conn, _user} ->
-        json(conn, %{
-          data: %{
-            token: conn.private[:api_auth_token],
-            renew_token: conn.private[:api_renew_token]
-          }
-        })
+      {conn, user} ->
+        conn
+        |> ChatApiWeb.EnsureUserEnabledPlug.call(user)
+        |> case do
+          %{halted: true} = conn ->
+            conn
+
+          conn ->
+            json(conn, %{
+              data: %{
+                user_id: user.id,
+                email: user.email,
+                account_id: user.account_id,
+                token: conn.private[:api_auth_token],
+                renew_token: conn.private[:api_renew_token]
+              }
+            })
+        end
     end
   end
 
@@ -53,10 +75,18 @@ defmodule ChatApiWeb.SessionController do
     |> json(%{data: %{}})
   end
 
+  @spec me(Conn.t(), map()) :: Conn.t()
   def me(conn, _params) do
     case conn.assigns.current_user do
-      %{id: id, email: email, account_id: account_id} ->
-        json(conn, %{data: %{id: id, email: email, account_id: account_id}})
+      %{id: id, email: email, account_id: account_id, role: role} ->
+        json(conn, %{
+          data: %{
+            id: id,
+            email: email,
+            account_id: account_id,
+            role: role
+          }
+        })
 
       nil ->
         conn

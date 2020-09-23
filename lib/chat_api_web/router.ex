@@ -10,12 +10,19 @@ defmodule ChatApiWeb.Router do
   end
 
   pipeline :api do
+    plug(ChatApiWeb.IPAddressPlug)
     plug(:accepts, ["json"])
     plug(ChatApiWeb.APIAuthPlug, otp_app: :chat_api)
   end
 
   pipeline :api_protected do
     plug(Pow.Plug.RequireAuthenticated, error_handler: ChatApiWeb.APIAuthErrorHandler)
+    plug(ChatApiWeb.EnsureUserEnabledPlug)
+  end
+
+  # Swagger
+  scope "/api/swagger" do
+    forward "/", PhoenixSwagger.Plug.SwaggerUI, otp_app: :chat_api, swagger_file: "swagger.json"
   end
 
   # Public routes
@@ -26,9 +33,17 @@ defmodule ChatApiWeb.Router do
     resources("/session", SessionController, singleton: true, only: [:create, :delete])
     post("/session/renew", SessionController, :renew)
 
+    # TODO: figure out a way to secure these methods so they aren't abused
     post("/accounts", AccountController, :create)
     post("/conversations", ConversationController, :create)
     post("/customers", CustomerController, :create)
+    put("/customers/:id/metadata", CustomerController, :update_metadata)
+    get("/customers/identify", CustomerController, :identify)
+    get("/widget_settings", WidgetSettingsController, :show)
+    put("/widget_settings/metadata", WidgetSettingsController, :update_metadata)
+    post("/verify_email", UserController, :verify_email)
+    post("/reset_password", UserController, :create_password_reset)
+    put("/reset_password", UserController, :reset_password)
 
     # TODO: figure out a better name?
     get("/conversations/customer", ConversationController, :find_by_customer)
@@ -43,15 +58,29 @@ defmodule ChatApiWeb.Router do
     get("/me", SessionController, :me)
     get("/accounts/me", AccountController, :me)
     get("/messages/count", MessageController, :count)
+    get("/billing", BillingController, :show)
+    post("/billing", BillingController, :create)
+    put("/billing", BillingController, :update)
 
     get("/slack/oauth", SlackController, :oauth)
     get("/slack/authorization", SlackController, :authorization)
+    put("/widget_settings", WidgetSettingsController, :create_or_update)
+    get("/profile", UserProfileController, :show)
+    put("/profile", UserProfileController, :create_or_update)
+    get("/user_settings", UserSettingsController, :show)
+    put("/user_settings", UserSettingsController, :create_or_update)
+    post("/users/:id/disable", UserController, :disable)
+    post("/users/:id/enable", UserController, :enable)
+    post("/payment_methods", PaymentMethodController, :create)
+    get("/payment_methods", PaymentMethodController, :show)
 
     resources("/user_invitations", UserInvitationController, except: [:new, :edit])
     resources("/accounts", AccountController, only: [:update, :delete])
     resources("/messages", MessageController, except: [:new, :edit])
     resources("/conversations", ConversationController, except: [:new, :edit, :create])
     resources("/customers", CustomerController, except: [:new, :edit, :create])
+    resources("/event_subscriptions", EventSubscriptionController, except: [:new, :edit])
+    post("/event_subscriptions/verify", EventSubscriptionController, :verify)
   end
 
   # Enables LiveDashboard only for development
@@ -75,5 +104,14 @@ defmodule ChatApiWeb.Router do
 
     get "/", PageController, :index
     get "/*path", PageController, :index
+  end
+
+  def swagger_info do
+    %{
+      info: %{
+        version: "1.0",
+        title: "Papercups API"
+      }
+    }
   end
 end

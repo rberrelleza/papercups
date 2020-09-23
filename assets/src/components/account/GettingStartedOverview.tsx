@@ -1,54 +1,168 @@
 import React from 'react';
+import {debounce} from 'lodash';
 import {Box} from 'theme-ui';
-import * as API from '../../api';
-import Title from 'antd/lib/typography/Title';
-import {Paragraph, Input, colors, Text} from '../common';
 import {TwitterPicker} from 'react-color';
 import SyntaxHighlighter from 'react-syntax-highlighter';
-import ChatWidget from '@papercups-io/chat-widget';
 import {atomOneLight} from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import ChatWidget from '@papercups-io/chat-widget';
+import * as API from '../../api';
+import {User} from '../../types';
+import {Paragraph, Input, colors, Text, Title} from '../common';
+import {BASE_URL} from '../../config';
+import logger from '../../logger';
 
 type Props = {};
 type State = {
-  account: any;
+  accountId: string | null;
   color: string;
   title: string;
   subtitle: string;
+  greeting?: string;
+  newMessagePlaceholder?: string;
+  currentUser: User | null;
 };
 
 class GettingStartedOverview extends React.Component<Props, State> {
   state: State = {
-    account: null,
+    accountId: null,
+    currentUser: null,
     color: colors.primary,
-    title: 'Welcome to Papercups!',
+    title: 'Welcome!',
     subtitle: 'Ask us anything in the chat window below 😊',
+    greeting: '',
+    newMessagePlaceholder: 'Start typing...',
   };
 
   async componentDidMount() {
+    const currentUser = await API.me();
     const account = await API.fetchAccountInfo();
+    const {
+      id: accountId,
+      company_name: company,
+      widget_settings: widgetSettings,
+    } = account;
 
-    this.setState({account});
+    if (widgetSettings && widgetSettings.id) {
+      const {
+        color,
+        title,
+        subtitle,
+        greeting,
+        new_message_placeholder: newMessagePlaceholder,
+      } = widgetSettings;
+
+      this.setState({
+        accountId,
+        currentUser,
+        greeting,
+        color: color || this.state.color,
+        subtitle: subtitle || this.state.subtitle,
+        title: title || `Welcome to ${company}`,
+        newMessagePlaceholder: newMessagePlaceholder || 'Start typing...',
+      });
+    } else {
+      this.setState({accountId, currentUser, title: `Welcome to ${company}`});
+    }
   }
 
+  debouncedUpdateWidgetSettings = debounce(
+    () => this.updateWidgetSettings(),
+    400
+  );
+
   handleChangeTitle = (e: any) => {
-    this.setState({title: e.target.value});
+    this.setState({title: e.target.value}, this.debouncedUpdateWidgetSettings);
   };
 
   handleChangeSubtitle = (e: any) => {
-    this.setState({subtitle: e.target.value});
+    this.setState(
+      {subtitle: e.target.value},
+      this.debouncedUpdateWidgetSettings
+    );
+  };
+
+  handleChangeGreeting = (e: any) => {
+    this.setState(
+      {greeting: e.target.value},
+      this.debouncedUpdateWidgetSettings
+    );
+  };
+
+  handleChangeNewMessagePlaceholder = (e: any) => {
+    this.setState(
+      {newMessagePlaceholder: e.target.value},
+      this.debouncedUpdateWidgetSettings
+    );
   };
 
   handleChangeColor = (color: any) => {
-    this.setState({color: color.hex});
+    this.setState({color: color.hex}, this.debouncedUpdateWidgetSettings);
   };
 
-  generateCode = (
-    title: string,
-    subtitle: string,
-    primaryColor: string,
-    accountId: string
-  ) => {
-    const REACT_CODE = `
+  updateWidgetSettings = async () => {
+    const {
+      color,
+      title,
+      subtitle,
+      greeting,
+      newMessagePlaceholder,
+    } = this.state;
+
+    API.updateWidgetSettings({
+      color,
+      title,
+      subtitle,
+      greeting,
+      new_message_placeholder: newMessagePlaceholder,
+    })
+      .then((res) => logger.debug('Updated widget settings:', res))
+      .catch((err) => logger.error('Error updating widget settings:', err));
+  };
+
+  generateHtmlCode = () => {
+    const {
+      accountId,
+      title,
+      subtitle,
+      color,
+      greeting,
+      newMessagePlaceholder,
+    } = this.state;
+
+    return `
+<script>
+  window.Papercups = {
+    config: {
+      accountId: '${accountId}',
+      title: '${title}',
+      subtitle: '${subtitle}',
+      primaryColor: '${color}',
+      greeting: '${greeting || ''}',
+      newMessagePlaceholder: '${newMessagePlaceholder || ''}',
+      baseUrl: '${BASE_URL}'
+    },
+  };
+</script>
+<script
+  type="text/javascript"
+  async
+  defer
+  src="${BASE_URL}/widget.js"
+></script>
+  `.trim();
+  };
+
+  generateReactCode = () => {
+    const {
+      accountId,
+      title,
+      subtitle,
+      color,
+      greeting,
+      newMessagePlaceholder,
+    } = this.state;
+
+    return `
 import React from 'react';
 import ChatWidget from '@papercups-io/chat-widget';
 
@@ -63,43 +177,49 @@ const ExamplePage = () => {
       <ChatWidget
         title='${title}'
         subtitle= '${subtitle}'
-        primaryColor='${primaryColor}'
+        primaryColor='${color}'
+        greeting='${greeting || ''}'
+        newMessagePlaceholder='${newMessagePlaceholder}'
         accountId='${accountId}'
+        baseUrl='${BASE_URL}'
       />
     </>
   );
 };
   `.trim();
-
-    const HTML_CODE = `
-<script>
-  window.Papercups = {
-    config: {
-      accountId: '${accountId}',
-      title: '${title}',
-      subtitle: '${subtitle}',
-      primaryColor: '${primaryColor}',
-    },
   };
-</script>
-<script
-  type="text/javascript"
-  async
-  defer
-  src="https://app.papercups.io/widget.js"
-></script>
-  `.trim();
-    return {REACT_CODE, HTML_CODE};
+
+  getUserMetadata = () => {
+    const {currentUser} = this.state;
+
+    if (!currentUser) {
+      return {};
+    }
+
+    const {id, email} = currentUser;
+
+    // TODO: include name if available
+    return {
+      email: email,
+      external_id: String(id),
+    };
   };
 
   render() {
-    const {color, title, subtitle, account} = this.state;
+    const {
+      color,
+      title,
+      subtitle,
+      greeting,
+      newMessagePlaceholder,
+      accountId,
+    } = this.state;
 
-    if (!account) {
+    if (!accountId) {
       return null; // TODO: better loading state
     }
 
-    const {id: accountId} = account;
+    const customer = this.getUserMetadata();
 
     return (
       <Box
@@ -128,7 +248,6 @@ const ExamplePage = () => {
               way you like!
             </Text>
           </Paragraph>
-
           <Box mb={3}>
             <label htmlFor="title">Update the title:</label>
             <Input
@@ -137,9 +256,9 @@ const ExamplePage = () => {
               placeholder="Welcome!"
               value={title}
               onChange={this.handleChangeTitle}
+              onBlur={this.updateWidgetSettings}
             />
           </Box>
-
           <Box mb={3}>
             <label htmlFor="subtitle">Update the subtitle:</label>
             <Input
@@ -148,9 +267,33 @@ const ExamplePage = () => {
               placeholder="How can we help you?"
               value={subtitle}
               onChange={this.handleChangeSubtitle}
+              onBlur={this.updateWidgetSettings}
             />
           </Box>
-
+          <Box mb={3}>
+            <label htmlFor="greeting">Set a greeting (refresh to view):</label>
+            <Input
+              id="greeting"
+              type="text"
+              placeholder="Hello! Any questions?"
+              value={greeting}
+              onChange={this.handleChangeGreeting}
+              onBlur={this.updateWidgetSettings}
+            />
+          </Box>
+          <Box mb={3}>
+            <label htmlFor="new_message_placeholder">
+              Update the new message placeholder text:
+            </label>
+            <Input
+              id="new_message_placeholder"
+              type="text"
+              placeholder="Start typing..."
+              value={newMessagePlaceholder}
+              onChange={this.handleChangeNewMessagePlaceholder}
+              onBlur={this.updateWidgetSettings}
+            />
+          </Box>
           <Box mb={3}>
             <Paragraph>Try changing the color:</Paragraph>
             <TwitterPicker
@@ -158,13 +301,15 @@ const ExamplePage = () => {
               onChangeComplete={this.handleChangeColor}
             />
           </Box>
-
           <ChatWidget
             title={title || 'Welcome!'}
             subtitle={subtitle}
             primaryColor={color}
+            greeting={greeting}
+            newMessagePlaceholder={newMessagePlaceholder}
             accountId={accountId}
-            baseUrl={'https://app.papercups.io'}
+            customer={customer}
+            baseUrl={BASE_URL}
             defaultIsOpen
           />
         </Box>
@@ -192,7 +337,7 @@ const ExamplePage = () => {
           </Paragraph>
 
           <SyntaxHighlighter language="html" style={atomOneLight}>
-            {this.generateCode(title, subtitle, color, accountId).HTML_CODE}
+            {this.generateHtmlCode()}
           </SyntaxHighlighter>
         </Box>
 
@@ -226,7 +371,7 @@ const ExamplePage = () => {
           </Paragraph>
 
           <SyntaxHighlighter language="typescript" style={atomOneLight}>
-            {this.generateCode(title, subtitle, color, accountId).REACT_CODE}
+            {this.generateReactCode()}
           </SyntaxHighlighter>
         </Box>
 

@@ -5,9 +5,9 @@ defmodule ChatApi.MixProject do
     [
       app: :chat_api,
       version: "0.1.0",
-      elixir: "~> 1.7",
+      elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: [:phoenix, :gettext] ++ Mix.compilers(),
+      compilers: [:phoenix, :gettext] ++ Mix.compilers() ++ [:phoenix_swagger],
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
@@ -35,6 +35,7 @@ defmodule ChatApi.MixProject do
     [
       {:credo, "~> 1.4", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
+      {:customerio, "~> 0.2"},
       {:swoosh, "~> 1.0"},
       {:gen_smtp, "~> 0.13"},
       {:phoenix, "~> 1.5.3"},
@@ -50,7 +51,12 @@ defmodule ChatApi.MixProject do
       {:jason, "~> 1.0"},
       {:plug_cowboy, "~> 2.0"},
       {:corsica, "~> 1.0"},
-      {:pow, "~> 1.0.18"}
+      {:pow, "~> 1.0.18"},
+      {:stripity_stripe, "~> 2.0"},
+      {:oban, "~> 2.1.0"},
+      {:sentry, "8.0.0"},
+      {:phoenix_swagger, "~> 0.8"},
+      {:ex_json_schema, "~> 0.5"}
     ]
   end
 

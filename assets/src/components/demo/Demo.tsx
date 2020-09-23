@@ -1,9 +1,21 @@
 import React from 'react';
-import {RouteComponentProps} from 'react-router-dom';
-import {Box} from 'theme-ui';
+import {RouteComponentProps, Link} from 'react-router-dom';
+import {Box, Flex} from 'theme-ui';
 import {TwitterPicker} from 'react-color';
 import qs from 'query-string';
-import {colors, Input, Paragraph, Title} from '../common';
+import {
+  colors,
+  Button,
+  Divider,
+  Input,
+  Paragraph,
+  Text,
+  Title,
+} from '../common';
+import {RightCircleOutlined} from '../icons';
+import {BASE_URL} from '../../config';
+import * as API from '../../api';
+import logger from '../../logger';
 // Testing widget in separate package
 import ChatWidget from '@papercups-io/chat-widget';
 
@@ -13,6 +25,7 @@ type State = {
   title: string;
   subtitle: string;
   accountId: string;
+  currentUser?: any;
 };
 
 class Demo extends React.Component<Props, State> {
@@ -27,10 +40,18 @@ class Demo extends React.Component<Props, State> {
     this.state = {
       color: defaultColor || colors.primary,
       title: defaultTitle || 'Welcome to Papercups!',
-      subtitle:
-        defaultSubtitle || 'Ask us anything in the chat window below 😊',
+      subtitle: defaultSubtitle || 'Ask us anything using the chat window 💭',
       accountId: 'eb504736-0f20-4978-98ff-1a82ae60b266',
+      currentUser: null,
     };
+  }
+
+  componentDidMount() {
+    API.me()
+      .then((currentUser) => this.setState({currentUser}))
+      .catch((err) => {
+        // Not logged in, no big deal
+      });
   }
 
   handleChangeTitle = (e: any) => {
@@ -45,8 +66,41 @@ class Demo extends React.Component<Props, State> {
     this.setState({color: color.hex});
   };
 
+  getCustomerMetadata = () => {
+    const {currentUser} = this.state;
+
+    if (!currentUser) {
+      return {};
+    }
+
+    const {id, email} = currentUser;
+
+    // TODO: include name if available
+    return {
+      email: email,
+      external_id: String(id),
+      metadata: {
+        // Just testing that ad hoc metadata works :)
+        ts: +new Date(),
+      },
+    };
+  };
+
   render() {
     const {color, title, subtitle, accountId} = this.state;
+    const customer = this.getCustomerMetadata();
+    const defaultColors = [
+      colors.primary,
+      '#00B3BE',
+      '#099720',
+      '#7556EB',
+      '#DE2828',
+      '#F223C5',
+      '#EC7F00',
+      '#1E1F21',
+      '#89603A',
+      '#878784',
+    ];
 
     return (
       <Box
@@ -58,9 +112,7 @@ class Demo extends React.Component<Props, State> {
         <Box mb={4}>
           <Title>Demo</Title>
           <Paragraph>
-            Hello there! You can play around with the chat widget on this page
-            by clicking on the toggle in the lower right-hand corner of the
-            page.
+            Hello! Try customizing the chat widget's display text and colors.
           </Paragraph>
         </Box>
 
@@ -86,20 +138,46 @@ class Demo extends React.Component<Props, State> {
 
         <Box mb={4}>
           <Paragraph>
-            Try changing the color (hint: you can enter any hex value you want!)
+            Try changing the color (you can enter any hex value you want!)
           </Paragraph>
           <TwitterPicker
             color={this.state.color}
+            colors={defaultColors}
             onChangeComplete={this.handleChangeColor}
           />
         </Box>
+
+        <Divider />
+
+        <Flex mb={4} sx={{alignItems: 'center'}}>
+          <Box mr={3}>
+            <Text strong>Ready to get started?</Text>
+          </Box>
+          <Link to="/register">
+            <Button type="primary" icon={<RightCircleOutlined />}>
+              Sign up for free
+            </Button>
+          </Link>
+        </Flex>
 
         <ChatWidget
           title={title || 'Welcome!'}
           subtitle={subtitle}
           primaryColor={color}
           accountId={accountId}
+          greeting="Hello :) have any questions or feedback? Alex or Kam will reply as soon as they can!"
+          customer={customer}
+          baseUrl={BASE_URL}
           defaultIsOpen
+          showAgentAvailability
+          onChatClosed={() => logger.debug('Chat closed!')}
+          onChatOpened={() => logger.debug('Chat opened!')}
+          onMessageReceived={(message: any) =>
+            logger.debug('Message received!', message)
+          }
+          onMessageSent={(message: any) =>
+            logger.debug('Message sent!', message)
+          }
         />
       </Box>
     );

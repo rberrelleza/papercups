@@ -7,36 +7,63 @@ import {
   Link,
   RouteComponentProps,
 } from 'react-router-dom';
+import {Helmet} from 'react-helmet';
 import {Box, Flex} from 'theme-ui';
-import {colors, Layout, Menu, Sider} from './common';
+import {colors, Badge, Layout, Menu, Sider} from './common';
 import {
   ApiOutlined,
   MailOutlined,
   UserOutlined,
-  SettingOutlined,
+  LogoutOutlined,
+  CreditCardOutlined,
+  TeamOutlined,
 } from './icons';
 import {useAuth} from './auth/AuthProvider';
 import AccountOverview from './account/AccountOverview';
+import UserProfile from './account/UserProfile';
 import GettingStartedOverview from './account/GettingStartedOverview';
+import {
+  ConversationsProvider,
+  useConversations,
+} from './conversations/ConversationsProvider';
 import AllConversations from './conversations/AllConversations';
 import MyConversations from './conversations/MyConversations';
 import PriorityConversations from './conversations/PriorityConversations';
 import ClosedConversations from './conversations/ClosedConversations';
 import IntegrationsOverview from './integrations/IntegrationsOverview';
+import BillingOverview from './billing/BillingOverview';
+import CustomersPage from './customers/CustomersPage';
+
+const hasValidStripeKey = () => {
+  const key = process.env.REACT_APP_STRIPE_PUBLIC_KEY;
+
+  return key && key.startsWith('pk_');
+};
 
 const Dashboard = (props: RouteComponentProps) => {
   const auth = useAuth();
-  const location = useLocation();
-  const [section, key] = location.pathname.split('/').slice(1); // Slice off initial slash
+  const {pathname} = useLocation();
+  const {unreadByCategory: unread} = useConversations();
+  const [section, key] = pathname.split('/').slice(1); // Slice off initial slash
+  const totalNumUnread = (unread && unread.all) || 0;
+  const shouldDisplayBilling = hasValidStripeKey();
 
-  const logout = () => {
-    auth.logout().then(() => props.history.push('/login'));
-  };
+  const logout = () => auth.logout().then(() => props.history.push('/login'));
 
   return (
     <Layout>
+      <Helmet>
+        <title>
+          {totalNumUnread
+            ? `(${totalNumUnread}) New message${
+                totalNumUnread === 1 ? '' : 's'
+              }!`
+            : 'Papercups'}
+        </title>
+      </Helmet>
+
       <Sider
-        width={200}
+        width={220}
         collapsed={false}
         style={{
           overflow: 'auto',
@@ -50,7 +77,7 @@ const Dashboard = (props: RouteComponentProps) => {
           <Box py={3} sx={{flex: 1}}>
             <Menu
               selectedKeys={[section, key]}
-              defaultOpenKeys={[section]}
+              defaultOpenKeys={[section, 'account', 'conversations']}
               mode="inline"
               theme="dark"
             >
@@ -62,6 +89,9 @@ const Dashboard = (props: RouteComponentProps) => {
                 <Menu.Item key="overview">
                   <Link to="/account/overview">Overview</Link>
                 </Menu.Item>
+                <Menu.Item key="profile">
+                  <Link to="/account/profile">My Profile</Link>
+                </Menu.Item>
                 <Menu.Item key="getting-started">
                   <Link to="/account/getting-started">Getting started</Link>
                 </Menu.Item>
@@ -72,18 +102,64 @@ const Dashboard = (props: RouteComponentProps) => {
                 title="Inbox"
               >
                 <Menu.Item key="all">
-                  <Link to="/conversations/all">All conversations</Link>
+                  <Link to="/conversations/all">
+                    <Flex
+                      sx={{
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box mr={2}>All conversations</Box>
+                      <Badge
+                        count={unread.all}
+                        style={{borderColor: '#FF4D4F'}}
+                      />
+                    </Flex>
+                  </Link>
                 </Menu.Item>
                 <Menu.Item key="me">
-                  <Link to="/conversations/me">Assigned to me</Link>
+                  <Link to="/conversations/me">
+                    <Flex
+                      sx={{
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box mr={2}>Assigned to me</Box>
+                      <Badge
+                        count={unread.mine}
+                        style={{borderColor: '#FF4D4F'}}
+                      />
+                    </Flex>
+                  </Link>
                 </Menu.Item>
                 <Menu.Item key="priority">
-                  <Link to="/conversations/priority">Prioritized</Link>
+                  <Link to="/conversations/priority">
+                    <Flex
+                      sx={{
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box mr={2}>Prioritized</Box>
+                      <Badge
+                        count={unread.priority}
+                        style={{borderColor: '#FF4D4F'}}
+                      />
+                    </Flex>
+                  </Link>
                 </Menu.Item>
                 <Menu.Item key="closed">
                   <Link to="/conversations/closed">Closed</Link>
                 </Menu.Item>
               </Menu.SubMenu>
+              <Menu.Item
+                title="Customers"
+                icon={<TeamOutlined />}
+                key="customers"
+              >
+                <Link to="/customers">Customers</Link>
+              </Menu.Item>
               <Menu.Item
                 title="Integrations"
                 icon={<ApiOutlined />}
@@ -91,6 +167,15 @@ const Dashboard = (props: RouteComponentProps) => {
               >
                 <Link to="/integrations">Integrations</Link>
               </Menu.Item>
+              {shouldDisplayBilling && (
+                <Menu.Item
+                  title="Billing"
+                  icon={<CreditCardOutlined />}
+                  key="billing"
+                >
+                  <Link to="/billing">Billing</Link>
+                </Menu.Item>
+              )}
             </Menu>
           </Box>
 
@@ -98,7 +183,7 @@ const Dashboard = (props: RouteComponentProps) => {
             <Menu mode="inline" theme="dark">
               <Menu.Item
                 title="Log out"
-                icon={<SettingOutlined />}
+                icon={<LogoutOutlined />}
                 key="logout"
                 onClick={logout}
               >
@@ -109,14 +194,16 @@ const Dashboard = (props: RouteComponentProps) => {
         </Flex>
       </Sider>
 
-      <Layout style={{marginLeft: 200, background: colors.white}}>
+      <Layout style={{marginLeft: 220, background: colors.white}}>
         <Switch>
           <Route path="/account/overview" component={AccountOverview} />
+          <Route path="/account/profile" component={UserProfile} />
           <Route
             path="/account/getting-started"
             component={GettingStartedOverview}
           />
           <Route path="/account*" component={AccountOverview} />
+          <Route path="/customers" component={CustomersPage} />
           <Route path="/integrations/:type" component={IntegrationsOverview} />
           <Route path="/integrations" component={IntegrationsOverview} />
           <Route path="/integrations*" component={IntegrationsOverview} />
@@ -127,7 +214,9 @@ const Dashboard = (props: RouteComponentProps) => {
             component={PriorityConversations}
           />
           <Route path="/conversations/closed" component={ClosedConversations} />
-          <Route path="/conversations*" component={AllConversations} />
+          {shouldDisplayBilling && (
+            <Route path="/billing" component={BillingOverview} />
+          )}
           <Route path="*" render={() => <Redirect to="/conversations/all" />} />
         </Switch>
       </Layout>
@@ -135,4 +224,12 @@ const Dashboard = (props: RouteComponentProps) => {
   );
 };
 
-export default Dashboard;
+const DashboardWrapper = (props: RouteComponentProps) => {
+  return (
+    <ConversationsProvider>
+      <Dashboard {...props} />
+    </ConversationsProvider>
+  );
+};
+
+export default DashboardWrapper;

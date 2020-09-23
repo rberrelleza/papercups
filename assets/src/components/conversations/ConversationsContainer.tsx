@@ -1,31 +1,25 @@
 import React from 'react';
 import {Link} from 'react-router-dom';
 import {Box, Flex} from 'theme-ui';
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import {Channel} from 'phoenix';
-import * as API from '../../api';
 import {
   Button,
   colors,
   Content,
   Layout,
+  notification,
   Result,
   Sider,
   Text,
   Title,
 } from '../common';
 import {SmileOutlined} from '../icons';
-import {socket} from '../../socket';
-import {formatRelativeTime} from '../../utils';
-import {Message, Conversation} from '../../types';
+import {sleep} from '../../utils';
 import Spinner from '../Spinner';
 import ChatMessage from './ChatMessage';
 import ConversationHeader from './ConversationHeader';
 import ConversationItem from './ConversationItem';
+import ConversationClosing from './ConversationClosing';
 import ConversationFooter from './ConversationFooter';
-
-dayjs.extend(utc);
 
 const EmptyMessagesPlaceholder = () => {
   return (
@@ -59,315 +53,286 @@ const GettingStartedRedirect = () => {
 
 type Props = {
   title?: string;
-  conversations: Array<Conversation>;
   account: any;
   currentUser: any;
-  fetch: () => Promise<Array<Conversation>>;
-  onRefresh?: () => void;
-};
-type State = {
+  currentlyOnline?: any;
   loading: boolean;
   showGetStarted: boolean;
-  selectedConversationId?: string | null;
   conversationIds: Array<string>;
   conversationsById: {[key: string]: any};
   messagesByConversation: {[key: string]: any};
-  isUpdatingConversation: boolean;
+  fetch: () => Promise<Array<string>>;
+  onSelectConversation: (id: string | null, fn?: () => void) => void;
+  onUpdateConversation: (id: string, params: any) => Promise<void>;
+  onDeleteConversation: (id: string) => Promise<void>;
+  onSendMessage: (
+    message: string,
+    conversationId: string,
+    fn: () => void
+  ) => void;
+};
+
+type State = {
+  loading: boolean;
+  selected: string | null;
+  closing: Array<string>;
 };
 
 class ConversationsContainer extends React.Component<Props, State> {
   scrollToEl: any = null;
 
-  channel: Channel | null = null;
+  state: State = {loading: true, selected: null, closing: []};
 
-  state: State = {
-    loading: true,
-    showGetStarted: false,
-    selectedConversationId: null,
-    conversationIds: [],
-    conversationsById: {},
-    messagesByConversation: {},
-    isUpdatingConversation: false,
-  };
-
-  async componentDidMount() {
-    socket.connect();
-
-    const {conversationIds = []} = await this.refreshConversationsData();
-
-    const {account} = this.props;
-    const {id: accountId} = account;
-
-    this.joinNotificationChannel(accountId, conversationIds);
+  componentDidMount() {
+    this.props
+      .fetch()
+      .then(([first]) => {
+        this.setState({loading: false});
+        this.handleSelectConversation(first);
+        this.setupKeyboardShortcuts();
+      })
+      .then(() => this.scrollToEl.scrollIntoView());
   }
 
   componentWillUnmount() {
-    this.channel && this.channel.leave();
+    // Mark selected conversation as null
+    this.handleSelectConversation(null);
+    this.removeKeyboardShortcuts();
   }
 
-  refreshConversationsData = async () => {
-    this.setState({loading: true});
-
-    const conversations = await this.props.fetch();
-
-    if (!conversations || !conversations.length) {
-      const {count: numAccountMessages} = await API.countMessages();
-      const hasNoMessagesYet = numAccountMessages === 0;
-
-      this.setState({
-        showGetStarted: hasNoMessagesYet,
-        conversationsById: {},
-        messagesByConversation: {},
-        conversationIds: [],
-        selectedConversationId: null,
-        loading: false,
-      });
-
-      return {
-        conversationsById: {},
-        messagesByConversation: {},
-        conversationIds: [],
-        selectedConversationId: null,
-      };
+  componentDidUpdate(prev: Props) {
+    if (!this.state.selected) {
+      return null;
     }
 
-    return this.updateConversationsState(conversations);
+    const {selected} = this.state;
+    const {messagesByConversation: prevMessagesByConversation} = prev;
+    const {messagesByConversation} = this.props;
+    const prevMessages = prevMessagesByConversation[selected] || [];
+    const messages = messagesByConversation[selected] || [];
+
+    if (messages.length > prevMessages.length) {
+      this.scrollToEl.scrollIntoView();
+    }
+  }
+
+  setupKeyboardShortcuts = () => {
+    window.addEventListener('keydown', this.handleKeyboardShortcut);
   };
 
-  updateConversationsState = (conversations: Array<any>) => {
-    const {selectedConversationId} = this.state;
-
-    const conversationsById = conversations.reduce((acc: any, conv: any) => {
-      return {...acc, [conv.id]: conv};
-    }, {});
-    const messagesByConversation = conversations.reduce(
-      (acc: any, conv: any) => {
-        return {
-          ...acc,
-          [conv.id]: conv.messages.sort(
-            (a: any, b: any) =>
-              +new Date(a.created_at) - +new Date(b.created_at)
-          ),
-        };
-      },
-      {}
-    );
-    const conversationIds = Object.keys(conversationsById).sort(
-      (a: string, b: string) => {
-        const messagesA = messagesByConversation[a];
-        const messagesB = messagesByConversation[b];
-        const x = messagesA[messagesA.length - 1];
-        const y = messagesB[messagesB.length - 1];
-
-        return +new Date(y?.created_at) - +new Date(x?.created_at);
-      }
-    );
-    const [recentConversationId] = conversationIds;
-    const updatedSelectedId =
-      selectedConversationId && conversationsById[selectedConversationId]
-        ? selectedConversationId
-        : recentConversationId;
-
-    this.setState(
-      {
-        conversationsById,
-        messagesByConversation,
-        conversationIds,
-        selectedConversationId: updatedSelectedId,
-        loading: false,
-      },
-      () => this.scrollToEl.scrollIntoView()
-    );
-
-    return {
-      conversationsById,
-      messagesByConversation,
-      conversationIds,
-      selectedConversationId,
-    };
+  removeKeyboardShortcuts = () => {
+    window.removeEventListener('keydown', this.handleKeyboardShortcut);
   };
 
-  joinNotificationChannel = (
-    accountId: string,
-    conversationIds: Array<string>
-  ) => {
-    if (this.channel && this.channel.leave) {
-      this.channel.leave(); // TODO: what's the best practice here?
+  handleKeyboardShortcut = (e: any) => {
+    // TODO: should we use something other than metaKey/cmd?
+    const {metaKey, key} = e;
+
+    if (!metaKey) {
+      return null;
     }
 
-    // TODO: If no conversations exist, should we create a conversation with us
-    // so new users can play around with the chat right away and give us feedback?
-    this.channel = socket.channel(`notification:${accountId}`, {
-      ids: conversationIds,
-    });
+    // TODO: clean up a bit
+    switch (key) {
+      case 'ArrowDown':
+        e.preventDefault();
 
-    this.channel.on('shout', (message) => {
-      this.handleNewMessage(message);
-    });
+        return this.handleSelectConversation(this.getNextConversationId());
+      case 'ArrowUp':
+        e.preventDefault();
 
-    this.channel.on('conversation', ({id: conversationId}) => {
-      this.handleNewConversation(conversationId);
-    });
+        return this.handleSelectConversation(this.getPreviousConversationId());
+      case 'd':
+        e.preventDefault();
 
-    this.channel
-      .join()
-      .receive('ok', (res) => {
-        console.log('Joined successfully', res);
-      })
-      .receive('error', (err) => {
-        console.log('Unable to join', err);
-      });
+        return (
+          this.state.selected &&
+          this.handleCloseConversation(this.state.selected)
+        );
+      case 'p':
+        e.preventDefault();
+
+        return (
+          this.state.selected && this.handleMarkPriority(this.state.selected)
+        );
+      case 'u':
+        e.preventDefault();
+
+        return (
+          this.state.selected && this.handleMarkUnpriority(this.state.selected)
+        );
+      case 'o':
+        e.preventDefault();
+
+        return (
+          this.state.selected &&
+          this.handleReopenConversation(this.state.selected)
+        );
+      default:
+        return null;
+    }
   };
 
-  handleNewConversation = async (conversationId?: string) => {
-    if (!this.channel || !conversationId) {
-      return;
+  getNextConversationId = () => {
+    const {selected} = this.state;
+    const {conversationIds = []} = this.props;
+
+    if (conversationIds.length === 0) {
+      return null;
     }
 
-    this.channel.push('watch', {
-      conversation_id: conversationId,
-    });
+    const lastConversationId = conversationIds[conversationIds.length - 1];
 
-    const conversations = await this.props.fetch();
-
-    this.updateConversationsState(conversations);
-  };
-
-  handleSelectConversation = (id: string) => {
-    this.setState({selectedConversationId: id}, () =>
-      this.scrollToEl.scrollIntoView()
-    );
-  };
-
-  handleNewMessage = (message: Message) => {
-    console.log('New message!', message);
-
-    const {messagesByConversation, conversationIds} = this.state;
-    const {conversation_id: conversationId} = message;
-    const existing = messagesByConversation[conversationId] || [];
-    const update = {
-      ...messagesByConversation,
-      [conversationId]: [...existing, message],
-    };
-    const updatedConversationIds = [
-      conversationId,
-      ...conversationIds.filter((id) => id !== conversationId),
-    ];
-
-    this.setState(
-      {
-        messagesByConversation: update,
-        conversationIds: updatedConversationIds,
-      },
-      () => {
-        this.scrollToEl.scrollIntoView();
-      }
-    );
-  };
-
-  handleSendMessage = (message: string) => {
-    const {account, currentUser} = this.props;
-    const {selectedConversationId} = this.state;
-    const {id: accountId} = account;
-    const {id: userId} = currentUser;
-
-    if (!this.channel || !message || message.trim().length === 0) {
-      return;
+    if (!selected) {
+      return lastConversationId;
     }
 
-    this.channel.push('shout', {
-      body: message,
-      user_id: userId,
-      conversation_id: selectedConversationId,
-      account_id: accountId,
-      sender: 'agent', // TODO: remove?
+    const index = conversationIds.indexOf(selected);
+
+    return conversationIds[index + 1] || lastConversationId || null;
+  };
+
+  getPreviousConversationId = () => {
+    const {selected} = this.state;
+    const {conversationIds = []} = this.props;
+
+    if (conversationIds.length === 0) {
+      return null;
+    }
+
+    const firstConversationId = conversationIds[0];
+
+    if (!selected) {
+      return firstConversationId;
+    }
+
+    const index = conversationIds.indexOf(selected);
+
+    return conversationIds[index - 1] || firstConversationId;
+  };
+
+  // TODO: make sure this works as expected
+  refreshSelectedConversation = async () => {
+    const {selected} = this.state;
+    const nextId = this.getNextConversationId();
+    const updatedIds = await this.props.fetch();
+    const hasValidSelectedId = selected && updatedIds.indexOf(selected) !== -1;
+
+    if (!hasValidSelectedId) {
+      const hasValidNextId = nextId && updatedIds.indexOf(nextId) !== -1;
+      const nextSelectedId = hasValidNextId ? nextId : updatedIds[0];
+
+      this.handleSelectConversation(nextSelectedId);
+    }
+  };
+
+  isCustomerOnline = (customerId: string) => {
+    const {currentlyOnline = {}} = this.props;
+    const key = `customer:${customerId}`;
+
+    return !!(currentlyOnline && currentlyOnline[key]);
+  };
+
+  handleSelectConversation = (id: string | null) => {
+    this.setState({selected: id}, () => {
+      this.scrollToEl.scrollIntoView();
     });
+
+    this.props.onSelectConversation(id);
   };
 
-  formatMessage = (message: any) => {
-    return {
-      ...message,
-      sender: message.customer_id ? 'customer' : 'agent',
-    };
-  };
+  handleCloseConversation = async (conversationId: string) => {
+    this.setState({closing: [...this.state.closing, conversationId]});
 
-  formatConversation = (conversation: any, messages: Array<any>) => {
-    const recent = messages[messages.length - 1];
-    const created = dayjs.utc(recent.created_at);
-    const date = formatRelativeTime(created);
+    // TODO: figure out the best way to handle this when closing multiple
+    // conversations in a row very quickly
+    await sleep(1000);
+    await this.props.onUpdateConversation(conversationId, {status: 'closed'});
+    await this.refreshSelectedConversation();
 
-    return {
-      ...conversation,
-      customer: 'Anonymous User',
-      date: date || '1d', // TODO
-      preview: recent && recent.body ? recent.body : '...',
-      messages: messages,
-    };
-  };
-
-  handleUpdateConversation = async (conversationId: string, params: any) => {
-    this.setState({isUpdatingConversation: true});
-
-    const {conversationsById} = this.state;
-    const existing = conversationsById[conversationId];
-
-    // Optimistic update
     this.setState({
-      conversationsById: {
-        ...conversationsById,
-        [conversationId]: {...existing, ...params},
-      },
+      closing: this.state.closing.filter((id) => id !== conversationId),
+    });
+  };
+
+  handleReopenConversation = async (conversationId: string) => {
+    await this.props.onUpdateConversation(conversationId, {status: 'open'});
+
+    notification.open({
+      message: 'Conversation re-opened!',
+      duration: 2, // 2 seconds
+      description: (
+        <Box>
+          You can view this conversations once again{' '}
+          <a href="/conversations/all">here</a>.
+        </Box>
+      ),
     });
 
-    try {
-      await API.updateConversation(conversationId, {
-        conversation: params,
-      });
-
-      await this.refreshConversationsData();
-    } catch (err) {
-      // Revert
-      this.setState({
-        conversationsById: conversationsById,
-      });
-    }
-
-    this.setState({isUpdatingConversation: false});
+    await sleep(400);
+    await this.refreshSelectedConversation();
   };
 
-  handleCloseConversation = (conversationId: string) => {
-    this.handleUpdateConversation(conversationId, {status: 'closed'});
+  handleDeleteConversation = async (conversationId: string) => {
+    await this.props.onDeleteConversation(conversationId);
+
+    notification.open({
+      message: 'Conversation deleted!',
+      duration: 2, // 2 seconds
+      description: (
+        <Box>
+          This conversation was permanently deleted. You can view your active
+          conversations <a href="/conversations/all">here</a>.
+        </Box>
+      ),
+    });
+
+    await sleep(400);
+    await this.refreshSelectedConversation();
   };
 
-  handleReopenConversation = (conversationId: string) => {
-    this.handleUpdateConversation(conversationId, {status: 'open'});
+  handleMarkPriority = async (conversationId: string) => {
+    await this.props.onUpdateConversation(conversationId, {
+      priority: 'priority',
+    });
+    await this.refreshSelectedConversation();
   };
 
-  handleMarkPriority = (conversationId: string) => {
-    this.handleUpdateConversation(conversationId, {priority: 'priority'});
-  };
-
-  handleMarkUnpriority = (conversationId: string) => {
-    this.handleUpdateConversation(conversationId, {priority: 'not_priority'});
+  handleMarkUnpriority = async (conversationId: string) => {
+    await this.props.onUpdateConversation(conversationId, {
+      priority: 'not_priority',
+    });
+    await this.refreshSelectedConversation();
   };
 
   handleAssignUser = (conversationId: string, userId: string) => {
-    this.handleUpdateConversation(conversationId, {assignee_id: userId});
+    this.props.onUpdateConversation(conversationId, {assignee_id: userId});
+  };
+
+  handleSendMessage = (message: string) => {
+    const {selected: conversationId} = this.state;
+
+    if (!conversationId) {
+      return null;
+    }
+
+    this.props.onSendMessage(message, conversationId, () => {
+      this.scrollToEl.scrollIntoView();
+    });
   };
 
   render() {
-    const {account, currentUser} = this.props;
-    const users = (account && account.users) || [];
+    const {selected: selectedConversationId, closing = []} = this.state;
     const {
-      loading,
+      title,
+      account,
+      currentUser,
       showGetStarted,
-      selectedConversationId,
       conversationIds = [],
       conversationsById = {},
       messagesByConversation = {},
-    } = this.state;
-
-    // TODO: add loading state
+    } = this.props;
+    const users = (account && account.users) || [];
 
     const messages = selectedConversationId
       ? messagesByConversation[selectedConversationId]
@@ -375,6 +340,13 @@ class ConversationsContainer extends React.Component<Props, State> {
     const selectedConversation = selectedConversationId
       ? conversationsById[selectedConversationId]
       : null;
+    const selectedCustomer = selectedConversation
+      ? selectedConversation.customer
+      : null;
+
+    const loading = this.props.loading || this.state.loading;
+    const isClosingSelected =
+      selectedConversationId && closing.indexOf(selectedConversationId) !== -1;
 
     return (
       <Layout style={{background: colors.white}}>
@@ -386,24 +358,37 @@ class ConversationsContainer extends React.Component<Props, State> {
             overflow: 'auto',
             height: '100vh',
             position: 'fixed',
-            left: 200,
+            left: 220,
           }}
         >
           <Box p={3} sx={{borderBottom: '1px solid #f0f0f0'}}>
             <Title level={3} style={{marginBottom: 0, marginTop: 8}}>
-              {this.props.title || 'Conversations'}
+              {title || 'Conversations'}
             </Title>
           </Box>
 
           <Box>
-            {conversationIds.length ? (
+            {!loading && conversationIds.length ? (
               conversationIds.map((conversationId, idx) => {
                 const conversation = conversationsById[conversationId];
                 const messages = messagesByConversation[conversationId];
+                const {customer_id: customerId} = conversation;
+                const isCustomerOnline = this.isCustomerOnline(customerId);
                 const isHighlighted = conversationId === selectedConversationId;
-                const {gold, red, green, gray} = colors;
+                const isClosing = closing.indexOf(conversationId) !== -1;
+                const {gold, red, green, purple, magenta} = colors;
                 // TODO: come up with a better way to make colors/avatars consistent
-                const color = [gold, red, green, gray[0]][idx % 4];
+                const colorIndex = parseInt(customerId, 32) % 5;
+                const color = [gold, red, green, purple, magenta][colorIndex];
+
+                if (isClosing) {
+                  return (
+                    <ConversationClosing
+                      key={conversationId}
+                      isHighlighted={isHighlighted}
+                    />
+                  );
+                }
 
                 return (
                   <ConversationItem
@@ -411,6 +396,7 @@ class ConversationsContainer extends React.Component<Props, State> {
                     conversation={conversation}
                     messages={messages}
                     isHighlighted={isHighlighted}
+                    isCustomerOnline={isCustomerOnline}
                     color={color}
                     onSelectConversation={this.handleSelectConversation}
                   />
@@ -434,9 +420,12 @@ class ConversationsContainer extends React.Component<Props, State> {
             onRemovePriority={this.handleMarkUnpriority}
             onCloseConversation={this.handleCloseConversation}
             onReopenConversation={this.handleReopenConversation}
+            onDeleteConversation={this.handleDeleteConversation}
           />
 
-          <Content style={{overflowY: 'scroll'}}>
+          <Content
+            style={{overflowY: 'scroll', opacity: isClosingSelected ? 0.6 : 1}}
+          >
             {loading ? (
               <Flex
                 sx={{
@@ -455,9 +444,8 @@ class ConversationsContainer extends React.Component<Props, State> {
                 sx={{minHeight: '100%'}}
               >
                 {messages.length ? (
-                  messages.map((message: any, key: number) => {
+                  messages.map((msg: any, key: number) => {
                     // Slight hack
-                    const msg = this.formatMessage(message);
                     const next = messages[key + 1];
                     const isMe = msg.user_id && msg.user_id === currentUser.id;
                     const isLastInGroup = next
@@ -469,6 +457,7 @@ class ConversationsContainer extends React.Component<Props, State> {
                       <ChatMessage
                         key={key}
                         message={msg}
+                        customer={selectedCustomer}
                         isMe={isMe}
                         isLastInGroup={isLastInGroup}
                         shouldDisplayTimestamp={isLastInGroup}
@@ -486,7 +475,12 @@ class ConversationsContainer extends React.Component<Props, State> {
           </Content>
 
           {selectedConversation && (
-            <ConversationFooter onSendMessage={this.handleSendMessage} />
+            // NB: the `key` forces a rerender so the input can clear
+            // any text from the last conversation and trigger autofocus
+            <ConversationFooter
+              key={selectedConversation.id}
+              onSendMessage={this.handleSendMessage}
+            />
           )}
         </Layout>
       </Layout>

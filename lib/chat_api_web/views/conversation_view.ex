@@ -23,9 +23,11 @@ defmodule ChatApiWeb.ConversationView do
       id: conversation.id,
       created_at: conversation.inserted_at,
       status: conversation.status,
+      read: conversation.read,
       priority: conversation.priority,
       account_id: conversation.account_id,
-      customer_id: conversation.customer_id
+      customer_id: conversation.customer_id,
+      assignee_id: conversation.assignee_id
     }
   end
 
@@ -34,12 +36,13 @@ defmodule ChatApiWeb.ConversationView do
       id: conversation.id,
       created_at: conversation.inserted_at,
       status: conversation.status,
+      read: conversation.read,
       priority: conversation.priority,
       account_id: conversation.account_id,
       customer_id: conversation.customer_id,
       assignee_id: conversation.assignee_id,
       customer: render_one(conversation.customer, CustomerView, "customer.json"),
-      messages: render_many(conversation.messages, MessageView, "message.json")
+      messages: render_many(conversation.messages, MessageView, "expanded.json")
     }
   end
 end

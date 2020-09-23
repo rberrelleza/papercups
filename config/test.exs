@@ -10,6 +10,7 @@ config :chat_api, ChatApi.Repo,
   password: "postgres",
   database: "chat_api_test#{System.get_env("MIX_TEST_PARTITION")}",
   hostname: "localhost",
+  port: System.get_env("DATABASE_PORT") || 5432,
   pool: Ecto.Adapters.SQL.Sandbox
 
 # We don't run a server during test. If one is required,
@@ -17,6 +18,8 @@ config :chat_api, ChatApi.Repo,
 config :chat_api, ChatApiWeb.Endpoint,
   http: [port: 4002],
   server: false
+
+config :chat_api, Oban, crontab: false, queues: false, plugins: false
 
 # Print only warnings and errors during test
 config :logger, level: :warn

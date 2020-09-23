@@ -1,23 +1,30 @@
 defmodule ChatApiWeb.SlackController do
   use ChatApiWeb, :controller
 
-  alias ChatApi.{Chat, Slack, SlackAuthorizations, SlackConversationThreads}
+  require Logger
+
+  alias ChatApi.{
+    Messages,
+    Slack,
+    SlackAuthorizations,
+    SlackConversationThreads
+  }
 
   action_fallback ChatApiWeb.FallbackController
 
   def oauth(conn, %{"code" => code}) do
-    IO.inspect("Code from Slack OAuth:")
-    IO.inspect(code)
+    Logger.info("Code from Slack OAuth: #{inspect(code)}")
 
+    # TODO: improve error handling!
     {:ok, response} = Slack.get_access_token(code)
 
-    IO.inspect("Slack OAuth response:")
-    IO.inspect(response)
+    Logger.info("Slack OAuth response: #{inspect(response)}")
 
     %{body: body} = response
 
     if Map.get(body, "ok") do
-      with %{
+      with %{account_id: account_id} <- conn.assigns.current_user,
+           %{
              "access_token" => access_token,
              "app_id" => app_id,
              "bot_user_id" => bot_user_id,
@@ -35,9 +42,6 @@ defmodule ChatApiWeb.SlackController do
              "configuration_url" => configuration_url,
              "url" => webhook_url
            } <- incoming_webhook do
-        # FIXME
-        account_id = "eb504736-0f20-4978-98ff-1a82ae60b266"
-
         params = %{
           account_id: account_id,
           access_token: access_token,
@@ -54,7 +58,7 @@ defmodule ChatApiWeb.SlackController do
           webhook_url: webhook_url
         }
 
-        SlackAuthorizations.find_or_create(account_id, params)
+        SlackAuthorizations.create_or_update(account_id, params)
 
         json(conn, %{data: %{ok: true}})
       else
@@ -88,8 +92,7 @@ defmodule ChatApiWeb.SlackController do
   end
 
   def webhook(conn, payload) do
-    IO.inspect("Payload from Slack webhook:")
-    IO.inspect(payload)
+    Logger.debug("Payload from Slack webhook: #{inspect(payload)}")
 
     case payload do
       %{"event" => event} ->
@@ -110,32 +113,40 @@ defmodule ChatApiWeb.SlackController do
   end
 
   defp handle_event(
-         %{"type" => "message", "text" => text, "thread_ts" => thread_ts, "channel" => channel} =
-           event
+         %{
+           "type" => "message",
+           "text" => text,
+           "thread_ts" => thread_ts,
+           "channel" => channel,
+           "user" => user_id
+         } = event
        ) do
-    IO.inspect("Handling Slack event:")
-    IO.inspect(event)
+    Logger.debug("Handling Slack event: #{inspect(event)}")
 
-    thread = SlackConversationThreads.get_by_slack_thread_ts(thread_ts, channel)
-
-    with conversation <- thread.conversation do
-      %{id: conversation_id, account_id: account_id, assignee_id: assignee_id} = conversation
+    with {:ok, conversation} <- get_thread_conversation(thread_ts, channel) do
+      %{id: conversation_id, account_id: account_id} = conversation
+      sender_id = Slack.get_sender_id(conversation, user_id)
 
       params = %{
         "body" => text,
         "conversation_id" => conversation_id,
         "account_id" => account_id,
-        # TODO: map Slack users to internal users eventually?
-        # (Currently we just assume the assignee is always the one responding)
-        "user_id" => assignee_id
+        "user_id" => sender_id
       }
 
-      {:ok, message} = Chat.create_message(params)
-      result = ChatApiWeb.MessageView.render("message.json", message: message)
-
-      ChatApiWeb.Endpoint.broadcast!("conversation:" <> conversation.id, "shout", result)
+      params
+      |> Messages.create_and_fetch!()
+      |> Messages.broadcast_to_conversation!()
+      |> Messages.notify(:webhooks)
     end
   end
 
   defp handle_event(_), do: nil
+
+  defp get_thread_conversation(thread_ts, channel) do
+    case SlackConversationThreads.get_by_slack_thread_ts(thread_ts, channel) do
+      %{conversation: conversation} -> {:ok, conversation}
+      _ -> {:error, "Not found"}
+    end
+  end
 end

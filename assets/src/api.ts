@@ -1,5 +1,6 @@
 import request from 'superagent';
 import {getAuthTokens} from './storage';
+import {Conversation, User} from './types';
 
 // TODO: handle this on the server instead
 function now() {
@@ -26,19 +27,37 @@ export type RegisterParams = LoginParams & {
   passwordConfirmation: string;
 };
 
-const getAccessToken = (): string | null => {
+export type ResetPasswordParams = {
+  password: string;
+  passwordConfirmation: string;
+};
+
+export type WidgetSettingsParams = {
+  id?: string;
+  title: string;
+  subtitle: string;
+  color: string;
+  greeting?: string;
+  new_message_placeholder?: string;
+};
+
+export type EventSubscriptionParams = {
+  webhook_url: string;
+};
+
+export const getAccessToken = (): string | null => {
   const tokens = getAuthTokens();
 
   return (tokens && tokens.token) || null;
 };
 
-const getRefreshToken = (): string | null => {
+export const getRefreshToken = (): string | null => {
   const tokens = getAuthTokens();
 
   return (tokens && tokens.renew_token) || null;
 };
 
-export const me = async (token = getAccessToken()) => {
+export const me = async (token = getAccessToken()): Promise<User> => {
   if (!token) {
     throw new Error('Invalid token!');
   }
@@ -92,6 +111,34 @@ export const renew = async (token = getRefreshToken()) => {
     .then((res) => res.body.data);
 };
 
+export const verifyUserEmail = async (verificationToken: string) => {
+  return request
+    .post(`/api/verify_email`)
+    .send({token: verificationToken})
+    .then((res) => res.body.data);
+};
+
+export const sendPasswordResetEmail = async (email: string) => {
+  return request
+    .post(`/api/reset_password`)
+    .send({email})
+    .then((res) => res.body.data);
+};
+
+export const attemptPasswordReset = async (
+  passwordResetToken: string,
+  {password, passwordConfirmation}: ResetPasswordParams
+) => {
+  return request
+    .put(`/api/reset_password`)
+    .send({
+      password,
+      password_confirmation: passwordConfirmation,
+      token: passwordResetToken,
+    })
+    .then((res) => res.body.data);
+};
+
 export const createNewCustomer = async (accountId: string) => {
   return request
     .post(`/api/customers`)
@@ -102,6 +149,17 @@ export const createNewCustomer = async (accountId: string) => {
         last_seen: now(),
       },
     }) // TODO: send over some metadata?
+    .then((res) => res.body.data);
+};
+
+export const fetchCustomers = async (token = getAccessToken()) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .get(`/api/customers`)
+    .set('Authorization', token)
     .then((res) => res.body.data);
 };
 
@@ -131,7 +189,82 @@ export const fetchAccountInfo = async (token = getAccessToken()) => {
     .then((res) => res.body.data);
 };
 
-export const fetchAllConversations = async (token = getAccessToken()) => {
+export const updateAccountInfo = async (
+  updates: any,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .put(`/api/accounts/me`)
+    .set('Authorization', token)
+    .send({
+      account: updates,
+    })
+    .then((res) => res.body.data);
+};
+
+export const fetchUserProfile = async (token = getAccessToken()) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .get(`/api/profile`)
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const updateUserProfile = async (
+  updates: any,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .put(`/api/profile`)
+    .set('Authorization', token)
+    .send({
+      user_profile: updates,
+    })
+    .then((res) => res.body.data);
+};
+
+export const fetchUserSettings = async (token = getAccessToken()) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .get('/api/user_settings')
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const updateUserSettings = async (
+  updates: any,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .put('/api/user_settings')
+    .set('Authorization', token)
+    .send({
+      user_settings: updates,
+    })
+    .then((res) => res.body.data);
+};
+
+export const fetchAllConversations = async (
+  token = getAccessToken()
+): Promise<Array<Conversation>> => {
   if (!token) {
     throw new Error('Invalid token!');
   }
@@ -153,7 +286,7 @@ export const fetchMyConversations = async (
 
   return request
     .get(`/api/conversations`)
-    .query({assignee_id: userId})
+    .query({assignee_id: userId, status: 'open'})
     .set('Authorization', token)
     .then((res) => res.body.data);
 };
@@ -165,7 +298,7 @@ export const fetchPriorityConversations = async (token = getAccessToken()) => {
 
   return request
     .get(`/api/conversations`)
-    .query({priority: 'priority'})
+    .query({priority: 'priority', status: 'open'})
     .set('Authorization', token)
     .then((res) => res.body.data);
 };
@@ -198,14 +331,16 @@ export const updateConversation = async (
     .then((res) => res.body.data);
 };
 
-// TODO: deprecate, messages should only be fetched by conversation
-export const fetchMessages = async (token = getAccessToken()) => {
+export const deleteConversation = async (
+  conversationId: string,
+  token = getAccessToken()
+) => {
   if (!token) {
     throw new Error('Invalid token!');
   }
 
   return request
-    .get(`/api/messages`)
+    .delete(`/api/conversations/${conversationId}`)
     .set('Authorization', token)
     .then((res) => res.body.data);
 };
@@ -254,6 +389,80 @@ export const fetchSlackAuthorization = async (token = getAccessToken()) => {
     .then((res) => res.body.data);
 };
 
+export const fetchEventSubscriptions = async (token = getAccessToken()) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .get(`/api/event_subscriptions`)
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const verifyWebhookUrl = async (
+  url: string,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .post(`/api/event_subscriptions/verify`)
+    .set('Authorization', token)
+    .send({url})
+    .then((res) => res.body.data);
+};
+
+export const createEventSubscription = async (
+  params: EventSubscriptionParams,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .post(`/api/event_subscriptions`)
+    .set('Authorization', token)
+    .send({
+      event_subscription: params,
+    })
+    .then((res) => res.body.data);
+};
+
+export const updateEventSubscription = async (
+  id: string,
+  updates: EventSubscriptionParams,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .put(`/api/event_subscriptions/${id}`)
+    .set('Authorization', token)
+    .send({
+      event_subscription: updates,
+    })
+    .then((res) => res.body.data);
+};
+
+export const deleteEventSubscription = async (
+  id: string,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .delete(`/api/event_subscriptions/${id}`)
+    .set('Authorization', token);
+};
+
 export const authorizeSlackIntegration = async (
   code: string,
   token = getAccessToken()
@@ -265,6 +474,116 @@ export const authorizeSlackIntegration = async (
   return request
     .get(`/api/slack/oauth`)
     .query({code})
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const updateWidgetSettings = async (
+  widgetSettingsParams: WidgetSettingsParams,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .put(`/api/widget_settings`)
+    .send({widget_settings: widgetSettingsParams})
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const fetchDefaultPaymentMethod = async (token = getAccessToken()) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .get(`/api/payment_methods`)
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const fetchBillingInfo = async (token = getAccessToken()) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .get(`/api/billing`)
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const createSubscriptionPlan = async (
+  plan: string,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .post(`/api/billing`)
+    .send({plan})
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const updateSubscriptionPlan = async (
+  plan: string,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .put(`/api/billing`)
+    .send({plan})
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const createPaymentMethod = async (
+  paymentMethod: any,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .post(`/api/payment_methods`)
+    .send({payment_method: paymentMethod})
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const disableAccountUser = async (
+  userId: number | string,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .post(`/api/users/${userId}/disable`)
+    .set('Authorization', token)
+    .then((res) => res.body.data);
+};
+
+export const enableAccountUser = async (
+  userId: number | string,
+  token = getAccessToken()
+) => {
+  if (!token) {
+    throw new Error('Invalid token!');
+  }
+
+  return request
+    .post(`/api/users/${userId}/enable`)
     .set('Authorization', token)
     .then((res) => res.body.data);
 };

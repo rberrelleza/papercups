@@ -3,6 +3,7 @@ import {RouteComponentProps, Link} from 'react-router-dom';
 import {Box, Flex} from 'theme-ui';
 import {Button, Input, Text, Title} from '../common';
 import {useAuth} from './AuthProvider';
+import logger from '../../logger';
 
 type Props = RouteComponentProps & {
   onSubmit: (params: any) => Promise<void>;
@@ -45,7 +46,7 @@ class Login extends React.Component<Props, State> {
       .onSubmit({email, password})
       .then(() => this.props.history.push('/conversations'))
       .catch((err) => {
-        console.log('Error!', err);
+        logger.error('Error!', err);
         const error =
           err.response?.body?.error?.message || 'Invalid credentials';
 
@@ -113,7 +114,10 @@ class Login extends React.Component<Props, State> {
             )}
 
             <Box mt={error ? 3 : 4}>
-              Don't have an account? <Link to="register">Sign up!</Link>
+              Don't have an account? <Link to="/register">Sign up!</Link>
+            </Box>
+            <Box my={3}>
+              <Link to="/reset-password">Forgot your password?</Link>
             </Box>
           </form>
         </Box>
