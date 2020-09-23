@@ -11,12 +11,12 @@ RUN curl -sL https://deb.nodesource.com/setup_12.x | bash - && \
 # declared here since they are required at build and run time.
 ENV DATABASE_URL="ecto://postgres:postgres@localhost/chat_api" SECRET_KEY_BASE="" MIX_ENV=dev FROM_ADDRESS="" MAILGUN_API_KEY=""
 
+COPY assets/package.json assets/package-lock.json ./assets/
+RUN npm install --prefix=assets
+
 COPY mix.exs mix.lock ./
 COPY config config
 RUN mix do deps.get, deps.compile
-
-COPY assets/package.json assets/package-lock.json ./assets/
-RUN npm install --prefix=assets
 
 COPY priv priv
 COPY assets assets

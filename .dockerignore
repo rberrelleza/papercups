@@ -27,14 +27,15 @@ chat_api-*.tar
 # this depending on your deployment strategy.
 /priv/static/
 
+/assets/node_modules
+/assets/build
+
 # Environment variable file
 .env
-
-/okteto.yaml
-/k8s.yaml
 
 # Heroku configuration files
 /phoenix_static_buildpack.config
 /Procfile
 
+# Helm chart
 /chart
